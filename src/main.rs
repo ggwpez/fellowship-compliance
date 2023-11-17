@@ -7,21 +7,22 @@ use actix_web::{
 	http::header::{CacheControl, CacheDirective},
 	middleware,
 	middleware::Logger,
-    web::Data,
-	web, App, HttpRequest, HttpResponse, HttpServer, Responder, Result,
+	web,
+	web::Data,
+	App, HttpRequest, HttpResponse, HttpServer, Responder, Result,
 };
-use subxt::utils::AccountId32;
-use std::{sync::RwLock, collections::BTreeMap};
 use badge_maker::BadgeBuilder;
 use cached::proc_macro::cached;
 use clap::Parser;
+use core::time::Duration;
 use openssl::ssl::{SslAcceptor, SslFiletype, SslMethod};
 use std::{
-	collections::BTreeSet,
+	collections::{BTreeMap, BTreeSet},
 	path::{Path, PathBuf},
 	process::Command,
+	sync::RwLock,
 };
-use core::time::Duration;
+use subxt::utils::AccountId32;
 
 mod chain;
 mod html;
@@ -71,12 +72,12 @@ async fn main() -> std::io::Result<()> {
 	let endpoint = format!("{}:{}", cmd.endpoint, cmd.port);
 	log::info!("Listening to http://{}", endpoint);
 
-    let data = Data::new(RwLock::new(State::default()));
-    let d2 = data.clone();
+	let data = Data::new(RwLock::new(State::default()));
+	let d2 = data.clone();
 
 	let server = HttpServer::new(move || {
 		App::new()
-            .app_data(Data::clone(&data))
+			.app_data(Data::clone(&data))
 			.wrap(middleware::Compress::default())
 			.wrap(Logger::new("%a %r %s %b %{Referer}i %Ts"))
 			.service(fs::Files::new("/static", &static_path).show_files_listing())
@@ -86,20 +87,20 @@ async fn main() -> std::io::Result<()> {
 	.workers(4);
 
 	// Use this single-threaded runtime for spawning since out state is not `Send`.
-    actix_web::rt::spawn(async move {
-        let mut interval = tokio::time::interval(Duration::from_secs(60 * 60 * 6)); // 6 hrs
+	actix_web::rt::spawn(async move {
+		let mut interval = tokio::time::interval(Duration::from_secs(60 * 60 * 6)); // 6 hrs
 		{
 			interval.tick().await;
 			let fellows = chain::Fellows::load().await.unwrap();
 			d2.write().unwrap().fellows = fellows; // TODO timeout
 		}
 
-        loop {
-            interval.tick().await;
-            let fellows = chain::Fellows::fetch().await.unwrap();
+		loop {
+			interval.tick().await;
+			let fellows = chain::Fellows::fetch().await.unwrap();
 			d2.write().unwrap().fellows = fellows;
-        }
-    });
+		}
+	});
 
 	let bound_server = if let Some(cert) = cmd.cert {
 		let mut builder = SslAcceptor::mozilla_intermediate(SslMethod::tls()).unwrap();

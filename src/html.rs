@@ -1,10 +1,10 @@
-use sailfish::TemplateOnce;
 use actix_web::HttpResponse;
+use sailfish::TemplateOnce;
 
 #[derive(TemplateOnce)]
 #[template(path = "members.stpl")]
 pub struct Members<'a> {
-    pub members: &'a crate::chain::Fellows,
+	pub members: &'a crate::chain::Fellows,
 }
 
 pub(crate) fn http_500(msg: String) -> HttpResponse {
