@@ -35,7 +35,7 @@
       });
 
 
-      $('#myTable_info').prepend("Last updated at: TODO. ")
+      //$('#myTable_info').prepend("Last updated at: TODO. ")
       
       console.log('JS done loading');
     });
@@ -74,7 +74,7 @@
         
         <!-- NAME VERIFIED -->
         <td data-order='<%- member.verified() %>'>
-          <%- if member.verified() { "<p style='color: #008000; text-shadow: #008000 1px 0 10px;';>YES</p>" } else { "<p style='color: #FF5733; text-shadow: #FF5733 1px 0 10px;';>NO</p>" }%>
+          <%- if member.verified() { "<div style='color: #008000; text-shadow: #008000 1px 0 10px;';>YES</div>" } else { "<div style='color: #FF5733; text-shadow: #FF5733 1px 0 10px;';>NO</div>" }%>
         </td>
         
         <!-- GITHUB -->
@@ -88,7 +88,7 @@
 
         <!-- GITHUB VERIFIED -->
         <td data-order='<%- member.github_verified() %>'>
-          <%- if member.github_verified() { "<p style='color: #008000; text-shadow: #008000 1px 0 10px;';>YES</p>" } else { "<p style='color: #FF5733; text-shadow: #FF5733 1px 0 10px;';>NO</p>" }%>
+          <%- if member.github_verified() { "<div style='color: #008000; text-shadow: #008000 1px 0 10px;';>YES</div>" } else { "<div style='color: #FF5733; text-shadow: #FF5733 1px 0 10px;';>NO</div>" }%>
         </td>
         
         <!-- ACCOUNT -->
@@ -98,7 +98,7 @@
 
         <!-- RANK -->
         <td data-order='<%- member.rank %>'>
-          <p style='text-shadow: #FFF 1px 0 <%- member.rank %>px;';><%= member.rank %></p>
+          <div style='text-shadow: #FFF 1px 0 <%- member.rank %>px;';><%= member.rank %></div>
         </td>
       </tr>
     <% } %>

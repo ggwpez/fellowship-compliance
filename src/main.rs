@@ -89,6 +89,7 @@ async fn main() -> std::io::Result<()> {
     actix_web::rt::spawn(async move {
         let mut interval = tokio::time::interval(Duration::from_secs(60 * 60 * 6)); // 6 hrs
 		{
+			interval.tick().await;
 			let fellows = chain::Fellows::load().await.unwrap();
 			d2.write().unwrap().fellows = fellows; // TODO timeout
 		}
