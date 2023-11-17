@@ -83,7 +83,7 @@ async fn main() -> std::io::Result<()> {
 			.service(index)
 			.service(version)
 	})
-	.workers(2);
+	.workers(4);
 
 	// Use this single-threaded runtime for spawning since out state is not `Send`.
     actix_web::rt::spawn(async move {
