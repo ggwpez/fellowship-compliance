@@ -31,9 +31,6 @@ use html::*;
 #[derive(Debug, Parser, Clone)]
 #[clap(author)]
 pub(crate) struct MainCmd {
-	#[clap(long = "static", short, default_value = "static")]
-	pub static_path: PathBuf,
-
 	#[clap(long, short, default_value = "127.0.0.1")]
 	pub endpoint: String,
 
@@ -59,7 +56,6 @@ async fn main() -> std::io::Result<()> {
 	std::env::set_var("RUST_BACKTRACE", "1");
 	env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
 	let cmd = MainCmd::parse();
-	let static_path = cmd.static_path.into_os_string();
 
 	// check that static_path is a dir
 	if !Path::new(&static_path).is_dir() {
@@ -80,7 +76,6 @@ async fn main() -> std::io::Result<()> {
 			.app_data(Data::clone(&data))
 			.wrap(middleware::Compress::default())
 			.wrap(Logger::new("%a %r %s %b %{Referer}i %Ts"))
-			.service(fs::Files::new("/static", &static_path).show_files_listing())
 			.service(index)
 			.service(version)
 	})

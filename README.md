@@ -1,6 +1,24 @@
 # (Inofficial) Fellowship Compliance Board
 
-Explanation for the rows:
+Shows compliance data for the members of the [Polkadot Fellowship](https://github.com/polkadot-fellows). Data is updated every 12hrs. Hopefully someone will create a nicer light-client app. This is just best effort until we have something nice.
+
+# Deployment
+
+It is a single binary without the need for a static asset directory. Build and start with:  
+```bash
+# If you need an SSL cert:
+certbot certonly
+cargo install --path .
+# Allow non-sudo binaries to listen on low ports:
+sudo setcap 'cap_net_bind_service=+ep' $(which fellows)
+fellows --endpoint 0.0.0.0 --port 443 --cert mycert.pem --key mykey.pem
+```
+
+# Columns
+
+Explanation for each row that you can see on [fellowship.tasty.limo](https://fellowship.tasty.limo):
+
+![Overview](.assets/overview.png)
 
 ## Name
 
