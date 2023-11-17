@@ -87,14 +87,17 @@ async fn main() -> std::io::Result<()> {
 
 	// Use this single-threaded runtime for spawning since out state is not `Send`.
     actix_web::rt::spawn(async move {
-        let mut interval = tokio::time::interval(Duration::from_millis(5000));
-		let fellows = chain::Fellows::load().await.unwrap();
-		d2.write().unwrap().fellows = fellows; // TODO timeout
+        let mut interval = tokio::time::interval(Duration::from_secs(60 * 60 * 6)); // 6 hrs
+		{
+			let fellows = chain::Fellows::load().await.unwrap();
+			d2.write().unwrap().fellows = fellows; // TODO timeout
+		}
 
-        /*loop {
+        loop {
             interval.tick().await;
-            chain::fetch(&d2).await.unwrap();
-        }*/
+            let fellows = chain::Fellows::fetch().await.unwrap();
+			d2.write().unwrap().fellows = fellows;
+        }
     });
 
 	let bound_server = if let Some(cert) = cmd.cert {
