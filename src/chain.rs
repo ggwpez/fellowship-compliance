@@ -186,9 +186,27 @@ impl Fellows {
 			let query = client.storage().at_latest().await.unwrap().fetch(&key).await?;
 
 			log::debug!("Identity of {}: {:?}", address.to_ss58check(), query);
-			member.identity = query;
+			if let Some(id) = query {
+				member.identity = Some(id);
+				continue;
+			}
+			
 			// TODO sub identities
-			//let key = polkadot::storage().identity().subs_of(address);
+			interval.tick().await;
+			let r: &[u8; 32] = address.as_ref();
+			let address = subxt::utils::AccountId32(*r);
+			let key = polkadot::storage().identity().super_of(address);
+			let query = client.storage().at_latest().await.unwrap().fetch(&key).await?;
+			log::debug!("Fetched super identity: {:?}", query);
+
+			if let Some((acc, sub_name)) = query {
+				interval.tick().await;
+				log::debug!("Fetching sub identity: {:?}", data_to_str(&sub_name));
+				let key = polkadot::storage().identity().identity_of(acc);
+				let query = client.storage().at_latest().await.unwrap().fetch(&key).await?;
+
+				member.identity = query;
+			}
 		}
 
 		Ok(())

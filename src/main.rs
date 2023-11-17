@@ -57,14 +57,6 @@ async fn main() -> std::io::Result<()> {
 	env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
 	let cmd = MainCmd::parse();
 
-	// check that static_path is a dir
-	if !Path::new(&static_path).is_dir() {
-		return Err(std::io::Error::new(
-			std::io::ErrorKind::Other,
-			format!("Web root path '{:?}' is not a directory", static_path),
-		))
-	}
-
 	let endpoint = format!("{}:{}", cmd.endpoint, cmd.port);
 	log::info!("Listening to http://{}", endpoint);
 

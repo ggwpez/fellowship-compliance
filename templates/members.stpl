@@ -30,7 +30,7 @@
         fixedColumns:   {
           heightMatch: 'none'
         },
-        order: [[5, 'desc'], [1, 'desc'], [3, 'asc'], [2, 'desc], [0, 'desc']],
+        order: [[5, 'desc'], [1, 'desc'], [3, 'asc'], [2, 'desc'], [0, 'desc']],
         searching: false,
       });
 
