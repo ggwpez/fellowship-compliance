@@ -89,13 +89,19 @@ type Client = OnlineClient<subxt::SubstrateConfig>;
 
 impl Fellows {
     pub async fn load() -> Result<Self> {
-        if std::path::Path::new("data.scale").exists() {
+        let path = std::path::Path::new("data.scale");
+        if path.exists() {
             log::info!("Loading from cache...");
             
             match Self::try_from_cache() {
-                Ok(s) => return Ok(s),
+                Ok(s) => {
+                    log::info!("Loaded from cache");
+                    return Ok(s)
+                },
                 Err(e) => log::warn!("Failed to load from cache. Falling back to fetch: {}", e),
             }
+        } else {
+            log::info!("Path {} does not exist. Falling back to fetch", path.display());
         }
 
         Self::fetch().await
@@ -110,6 +116,7 @@ impl Fellows {
 
     pub async fn fetch() -> Result<Self> {
         let mut s = Self::default();
+        log::info!("Fetching data from remote...");
 
         s.fetch_fellows().await?;
         s.fetch_identities().await?;
