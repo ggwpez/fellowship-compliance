@@ -138,7 +138,7 @@ impl Fellows {
 	}
 
 	async fn fetch_fellows(&mut self) -> Result<()> {
-		let mut interval = tokio::time::interval(Duration::from_millis(250));
+		let mut interval = tokio::time::interval(Duration::from_millis(2000));
 		log::info!("Initializing chain client...");
 		let url = "wss://polkadot-collectives-rpc.polkadot.io:443";
 		let client = Client::from_url(&url).await?;
@@ -172,7 +172,7 @@ impl Fellows {
 	}
 
 	async fn fetch_identities(&mut self) -> Result<()> {
-		let mut interval = tokio::time::interval(Duration::from_millis(250));
+		let mut interval = tokio::time::interval(Duration::from_millis(2000));
 		let url = "wss://rpc.polkadot.io:443";
 		let client = Client::from_url(&url).await?;
 

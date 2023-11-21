@@ -31,6 +31,9 @@ use html::*;
 #[derive(Debug, Parser, Clone)]
 #[clap(author)]
 pub(crate) struct MainCmd {
+	#[clap(long = "static", short, default_value = "static")]
+	pub static_path: PathBuf,
+
 	#[clap(long, short, default_value = "127.0.0.1")]
 	pub endpoint: String,
 
@@ -59,6 +62,15 @@ async fn main() -> std::io::Result<()> {
 
 	let endpoint = format!("{}:{}", cmd.endpoint, cmd.port);
 	log::info!("Listening to http://{}", endpoint);
+	let static_path = cmd.static_path.into_os_string();
+
+	// check that static_path is a dir
+	if !Path::new(&static_path).is_dir() {
+		return Err(std::io::Error::new(
+			std::io::ErrorKind::Other,
+			format!("Web root path '{:?}' is not a directory", static_path),
+		))
+	}
 
 	let data = Data::new(RwLock::new(State::default()));
 	let d2 = data.clone();
@@ -70,6 +82,7 @@ async fn main() -> std::io::Result<()> {
 			.wrap(Logger::new("%a %r %s %b %{Referer}i %Ts"))
 			.service(index)
 			.service(version)
+			.service(fs::Files::new("/static", &static_path).show_files_listing())
 	})
 	.workers(4);
 
