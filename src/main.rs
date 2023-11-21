@@ -84,11 +84,11 @@ async fn main() -> std::io::Result<()> {
 			.service(version)
 			.service(fs::Files::new("/static", &static_path).show_files_listing())
 	})
-	.workers(4);
+	.workers(6);
 
 	// Use this single-threaded runtime for spawning since out state is not `Send`.
 	actix_web::rt::spawn(async move {
-		let mut interval = tokio::time::interval(Duration::from_secs(60 * 60 * 6)); // 6 hrs
+		let mut interval = tokio::time::interval(Duration::from_secs(60 * 60 * 3)); // 6 hrs
 		{
 			interval.tick().await;
 			let fellows = chain::Fellows::load().await.unwrap();

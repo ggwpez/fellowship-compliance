@@ -46,3 +46,10 @@
     cursor: pointer;
   }
 </style>
+
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:site" content="@OliverTaleYazdi">
+<meta name="twitter:creator" content="@OliverTaleYazdi">
+<meta name="twitter:title" content="Polkadot Fellowship Compliance Board">
+<meta name="twitter:description" content="Shows all members and their linked digital identities.">
+<meta name="twitter:image" content="/static/twitter.png">
