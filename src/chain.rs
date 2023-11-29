@@ -88,6 +88,16 @@ impl Fellow {
 #[derive(Default, parity_scale_codec::Encode, parity_scale_codec::Decode)]
 pub struct Fellows {
 	pub members: BTreeMap<AccountId32, Fellow>,
+	#[codec(skip)]
+	pub num_named: u32,
+	#[codec(skip)]
+	pub num_verified: u32,
+	#[codec(skip)]
+	pub num_github: u32,
+	#[codec(skip)]
+	pub num_github_verified: u32,
+	#[codec(skip)]
+	pub num_accounts: u32,
 }
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
@@ -102,7 +112,7 @@ impl Fellows {
 			match Self::try_from_cache() {
 				Ok(s) => {
 					log::info!("Loaded from cache");
-					return Ok(s)
+					return Ok(Self::finalize(s))
 				},
 				Err(e) => log::warn!("Failed to load from cache. Falling back to fetch: {}", e),
 			}
@@ -110,7 +120,7 @@ impl Fellows {
 			log::info!("Path {} does not exist. Falling back to fetch", path.display());
 		}
 
-		Self::fetch().await
+		Self::fetch().await.map(Self::finalize)
 	}
 
 	fn try_from_cache() -> Result<Self> {
@@ -118,6 +128,30 @@ impl Fellows {
 		let mut data = Vec::new();
 		file.read_to_end(&mut data)?;
 		parity_scale_codec::Decode::decode(&mut &data[..]).map_err(Into::into)
+	}
+
+	fn finalize(mut self) -> Self {
+		for (_, member) in self.members.iter() {
+			self.num_accounts += 1;
+
+			if member.verified() {
+				self.num_verified += 1;
+			}
+
+			if member.github().is_some() {
+				self.num_github += 1;
+			}
+
+			if member.github_verified() {
+				self.num_github_verified += 1;
+			}
+
+			if member.name().is_some() {
+				self.num_named += 1;
+			}
+		}
+
+		self
 	}
 
 	pub async fn fetch() -> Result<Self> {
@@ -190,7 +224,7 @@ impl Fellows {
 				member.identity = Some(id);
 				continue;
 			}
-			
+
 			// TODO sub identities
 			interval.tick().await;
 			let r: &[u8; 32] = address.as_ref();

@@ -29,11 +29,11 @@
   <table id="myTable" class="display nowrap" style="width:100%" width="100%">
     <thead>
       <tr>
-        <th>Name</th>
-        <th>Verified</th>
-        <th>Github</th>
-        <th>Verified</th>
-        <th>Account</th>
+        <th>Name (<%- members.num_named %>)</th>
+        <th>Verified (<%- members.num_verified %>)</th>
+        <th>Github (<%- members.num_github %>)</th>
+        <th>Verified (<%- members.num_github_verified %>)</th>
+        <th>Account (<%- members.num_accounts %>)</th>
         <th>Rank</th>
       </tr>
     </thead>

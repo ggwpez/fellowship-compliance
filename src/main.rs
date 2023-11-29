@@ -119,7 +119,11 @@ async fn main() -> std::io::Result<()> {
 #[get("/")]
 async fn index(data: Data<RwLock<State>>) -> impl Responder {
 	use sailfish::TemplateOnce;
-	http_200(html::Members { members: &data.read().unwrap().fellows }.render_once().unwrap())
+	http_200(
+		html::Members::from_members(&data.read().unwrap().fellows)
+			.render_once()
+			.unwrap(),
+	)
 }
 
 #[get("/version")]

@@ -1,5 +1,5 @@
 $(document).ready(function () {
-	var table = $('#myTable').DataTable({
+	$('#myTable').DataTable({
 	  paging: false,
 	  ordering: true,
 	  select: {
@@ -29,6 +29,8 @@ $(document).ready(function () {
 		}
 		$(this).toggleClass("checked");
 	});
+
+	$('#myTable_info').hide();
 
 	console.log('JS done loading');
   });
