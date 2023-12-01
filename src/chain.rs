@@ -120,7 +120,7 @@ impl Fellows {
 			log::info!("Path {} does not exist. Falling back to fetch", path.display());
 		}
 
-		Self::fetch().await.map(Self::finalize)
+		Self::fetch().await
 	}
 
 	fn try_from_cache() -> Result<Self> {
@@ -168,7 +168,7 @@ impl Fellows {
 		file.write_all(&data)?;
 		log::info!("Data written to data.json");
 
-		Ok(s)
+		Ok(s.finalize())
 	}
 
 	async fn fetch_fellows(&mut self) -> Result<()> {
