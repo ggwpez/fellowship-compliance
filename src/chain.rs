@@ -174,11 +174,10 @@ impl Fellows {
 	async fn fetch_fellows(&mut self) -> Result<()> {
 		let mut interval = tokio::time::interval(Duration::from_millis(2000));
 		log::info!("Initializing chain client...");
-		let url = "wss://polkadot-collectives-rpc.polkadot.io:443";
-		let client = Client::from_url(&url).await?;
-		log::info!("Chain RPC connected");
+		let url = "wss://polkadot-collectives-rpc.polkadot.io";
+		let client = Client::from_url(&url).await.map_err(|e| format!("Failed to connect to {}: {}", url, e))?;
 
-		log::info!("Fetching data...");
+		log::info!("Fetching collectives data...");
 		let mut members = BTreeMap::new();
 		let key = collectives::storage().fellowship_collective().members_iter();
 		let mut query = client.storage().at_latest().await.unwrap().iter(key).await?;
