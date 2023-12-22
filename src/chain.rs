@@ -88,6 +88,7 @@ impl Fellow {
 #[derive(Default, parity_scale_codec::Encode, parity_scale_codec::Decode)]
 pub struct Fellows {
 	pub members: BTreeMap<AccountId32, Fellow>,
+	pub last_updated: u64,
 	#[codec(skip)]
 	pub num_named: u32,
 	#[codec(skip)]
@@ -104,6 +105,16 @@ type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 type Client = OnlineClient<subxt::SubstrateConfig>;
 
 impl Fellows {
+	fn now() -> Self {
+		Self {
+			last_updated: std::time::SystemTime::now()
+				.duration_since(std::time::UNIX_EPOCH)
+				.unwrap()
+				.as_secs(),
+			.. Default::default()
+		}
+	}
+
 	pub async fn load() -> Result<Self> {
 		let path = std::path::Path::new("data.scale");
 		if path.exists() {
@@ -155,7 +166,7 @@ impl Fellows {
 	}
 
 	pub async fn fetch() -> Result<Self> {
-		let mut s = Self::default();
+		let mut s = Self::now();
 		log::info!("Fetching data from remote...");
 
 		s.fetch_fellows().await?;
@@ -174,7 +185,7 @@ impl Fellows {
 	async fn fetch_fellows(&mut self) -> Result<()> {
 		let mut interval = tokio::time::interval(Duration::from_millis(2000));
 		log::info!("Initializing chain client...");
-		let url = "wss://polkadot-collectives-rpc.polkadot.io";
+		let url = "wss://polkadot-collectives-rpc.dwellir.com:443";
 		let client = Client::from_url(&url).await.map_err(|e| format!("Failed to connect to {}: {}", url, e))?;
 
 		log::info!("Fetching collectives data...");
@@ -186,7 +197,7 @@ impl Fellows {
 			interval.tick().await;
 			let account = AccountId32::from_slice(&id[id.len() - 32..]).unwrap();
 
-			log::debug!("Fetched member: {} rank {}", account.to_ss58check(), fellow.rank);
+			log::info!("Fetched member: {} rank {}", account.to_ss58check(), fellow.rank);
 			members.insert(
 				account.clone(),
 				Fellow {
@@ -208,7 +219,6 @@ impl Fellows {
 		let mut interval = tokio::time::interval(Duration::from_millis(2000));
 		let url = "wss://rpc.polkadot.io:443";
 		let client = Client::from_url(&url).await?;
-
 		log::info!("Fetching identities...");
 		for (address, member) in self.members.iter_mut() {
 			interval.tick().await;
@@ -224,7 +234,6 @@ impl Fellows {
 				continue;
 			}
 
-			// TODO sub identities
 			interval.tick().await;
 			let r: &[u8; 32] = address.as_ref();
 			let address = subxt::utils::AccountId32(*r);
@@ -240,6 +249,7 @@ impl Fellows {
 
 				member.identity = query;
 			}
+			log::info!("Fetched identity");
 		}
 
 		Ok(())
@@ -256,6 +266,7 @@ impl Fellows {
 		let client = reqwest::Client::builder().user_agent("useragent@spam.tasty.limo").build()?;
 
 		for (_, member) in self.members.iter_mut() {
+			interval.tick().await;
 			let address = member.address();
 
 			let Some(github) = member.github() else {
@@ -273,7 +284,7 @@ impl Fellows {
 
 			member.github_links_back = profile.bio.map_or(false, |b| b.contains(&address));
 			log::debug!("{} links back: {}", address, member.github_links_back);
-			interval.tick().await;
+			log::info!("Fetched github profile");
 		}
 
 		Ok(())
