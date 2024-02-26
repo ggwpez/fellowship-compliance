@@ -9,7 +9,15 @@ use std::{
 	collections::BTreeMap,
 	io::{Read, Write},
 };
+use core::iter;
+use std::num::NonZeroU32;
+use std::time::UNIX_EPOCH;
+use std::time::SystemTime;
 use subxt::*;
+use subxt::{
+    client::{LightClient, RawLightClient},
+    PolkadotConfig,
+};
 
 #[subxt::subxt(runtime_metadata_path = "metadata/polkadot.scale")]
 pub mod polkadot {}
@@ -18,6 +26,8 @@ pub mod polkadot {}
 pub mod collectives {}
 
 pub type Registration = polkadot::runtime_types::pallet_identity::types::Registration<u128>;
+
+const RPC_COOLDOWN_MS: u64 = 2000;
 
 #[derive(Debug, parity_scale_codec::Encode, parity_scale_codec::Decode)]
 pub struct Fellow {
@@ -43,7 +53,6 @@ fn data_to_str(data: &polkadot::runtime_types::pallet_identity::types::Data) -> 
 
 impl Fellow {
 	pub fn address(&self) -> String {
-		// take the first 32 bytes
 		self.account
 			.to_ss58check_with_version(sp_core::crypto::Ss58AddressFormat::custom(0))
 	}
@@ -88,7 +97,7 @@ impl Fellow {
 #[derive(Default, parity_scale_codec::Encode, parity_scale_codec::Decode)]
 pub struct Fellows {
 	pub members: BTreeMap<AccountId32, Fellow>,
-	pub last_updated: u64,
+	pub last_updated: Option<u64>,
 	#[codec(skip)]
 	pub num_named: u32,
 	#[codec(skip)]
@@ -107,12 +116,13 @@ type Client = OnlineClient<subxt::SubstrateConfig>;
 impl Fellows {
 	fn now() -> Self {
 		Self {
-			last_updated: std::time::SystemTime::now()
-				.duration_since(std::time::UNIX_EPOCH)
-				.unwrap()
-				.as_secs(),
+			last_updated: Some(now_s()),
 			.. Default::default()
 		}
+	}
+
+	pub fn since_last_update(&self) -> Option<Duration> {
+		Some(Duration::from_secs(now_s() - self.last_updated?))
 	}
 
 	pub async fn load() -> Result<Self> {
@@ -167,34 +177,96 @@ impl Fellows {
 
 	pub async fn fetch() -> Result<Self> {
 		let mut s = Self::now();
-		log::info!("Fetching data from remote...");
+		log::info!("Fetching data...");
 
-		s.fetch_fellows().await?;
-		s.fetch_identities().await?;
+		let (polkadot_api, collectives_api) = Self::build_clients().await?;
+
+		s.fetch_fellows(&collectives_api).await?;
+		s.fetch_identities(&polkadot_api).await?;
 		s.fetch_github().await?;
 
 		// Store in a file for faster restarts if it crashed
 		let mut file = std::fs::File::create("data.scale")?;
 		let data = parity_scale_codec::Encode::encode(&s);
 		file.write_all(&data)?;
-		log::info!("Data written to data.json");
+		log::info!("Data written to data.scale");
 
 		Ok(s.finalize())
 	}
 
-	async fn fetch_fellows(&mut self) -> Result<()> {
-		let mut interval = tokio::time::interval(Duration::from_millis(2000));
+	/// Build a light client for the relay chain and the parachain.
+	async fn build_clients() -> Result<(LightClient<PolkadotConfig>, LightClient<PolkadotConfig>)> {
+		let mut client =
+        subxt_lightclient::smoldot::Client::new(subxt_lightclient::smoldot::DefaultPlatform::new(
+            "subxt-example-light-client".into(),
+            "version-0".into(),
+        ));
+
+		let polkadot_connection = client
+        .add_chain(subxt_lightclient::smoldot::AddChainConfig {
+            specification: include_str!("../metadata/polkadot.json"),
+            json_rpc: subxt_lightclient::smoldot::AddChainConfigJsonRpc::Enabled {
+                max_pending_requests: NonZeroU32::new(128).unwrap(),
+                max_subscriptions: 1024,
+            },
+            potential_relay_chains: iter::empty(),
+            database_content: "",
+            user_data: (),
+        })
+        .expect("Light client chain added with valid spec; qed");
+    let polkadot_json_rpc_responses = polkadot_connection
+        .json_rpc_responses
+        .expect("Light client configured with json rpc enabled; qed");
+    let polkadot_chain_id = polkadot_connection.chain_id;
+
+    // Step 3. Connect to the parachain. For this example, the Asset hub parachain.
+    let assethub_connection = client
+        .add_chain(subxt_lightclient::smoldot::AddChainConfig {
+            specification: include_str!("../metadata/collectives-polkadot.json"),
+            json_rpc: subxt_lightclient::smoldot::AddChainConfigJsonRpc::Enabled {
+                max_pending_requests: NonZeroU32::new(128).unwrap(),
+                max_subscriptions: 1024,
+            },
+            // The chain specification of the asset hub parachain mentions that the identifier
+            // of its relay chain is `polkadot`.
+            potential_relay_chains: [polkadot_chain_id].into_iter(),
+            database_content: "",
+            user_data: (),
+        })
+        .expect("Light client chain added with valid spec; qed");
+		let parachain_json_rpc_responses = assethub_connection
+			.json_rpc_responses
+			.expect("Light client configured with json rpc enabled; qed");
+		let parachain_chain_id = assethub_connection.chain_id;
+
+		// Step 4. Turn the smoldot client into a raw client.
+		let raw_light_client = RawLightClient::builder()
+			.add_chain(polkadot_chain_id, polkadot_json_rpc_responses)
+			.add_chain(parachain_chain_id, parachain_json_rpc_responses)
+			.build(client)
+			.await?;
+
+		// Step 5. Obtain a client to target the relay chain and the parachain.
+		let polkadot_api: LightClient<PolkadotConfig> =
+			raw_light_client.for_chain(polkadot_chain_id).await?;
+		let parachain_api: LightClient<PolkadotConfig> =
+			raw_light_client.for_chain(parachain_chain_id).await?;
+
+		// Step 6. Subscribe to the finalized blocks of the chains.
+		
+		Ok((polkadot_api, parachain_api))	
+	}
+
+	async fn fetch_fellows(&mut self, collectives_rpc: &LightClient<PolkadotConfig>) -> Result<()> {
 		log::info!("Initializing chain client...");
-		let url = "wss://polkadot-collectives-rpc.dwellir.com:443";
-		let client = Client::from_url(&url).await.map_err(|e| format!("Failed to connect to {}: {}", url, e))?;
+		//let client = Client::from_url(&url).await.map_err(|e| format!("Failed to connect to {}: {}", url, e))?;
 
 		log::info!("Fetching collectives data...");
 		let mut members = BTreeMap::new();
 		let key = collectives::storage().fellowship_collective().members_iter();
-		let mut query = client.storage().at_latest().await.unwrap().iter(key).await?;
+		let mut query = collectives_rpc.storage().at_latest().await.unwrap().iter(key).await?;
 
 		while let Some(Ok((id, fellow))) = query.next().await {
-			interval.tick().await;
 			let account = AccountId32::from_slice(&id[id.len() - 32..]).unwrap();
 
 			log::info!("Fetched member: {} rank {}", account.to_ss58check(), fellow.rank);
@@ -211,22 +283,19 @@ impl Fellows {
 			);
 		}
 
+		log::info!("Fetched {} members", members.len());
 		self.members = members;
 		Ok(())
 	}
 
-	async fn fetch_identities(&mut self) -> Result<()> {
-		let mut interval = tokio::time::interval(Duration::from_millis(2000));
-		let url = "wss://rpc.polkadot.io:443";
-		let client = Client::from_url(&url).await?;
+	async fn fetch_identities(&mut self, relay_rpc: &LightClient<PolkadotConfig>) -> Result<()> {
 		log::info!("Fetching identities...");
 		for (address, member) in self.members.iter_mut() {
-			interval.tick().await;
 			// Subxt has a sligly different address type...
 			let r: &[u8; 32] = address.as_ref();
 			let add = subxt::utils::AccountId32(*r);
 			let key = polkadot::storage().identity().identity_of(add);
-			let query = client.storage().at_latest().await.unwrap().fetch(&key).await?;
+			let query = relay_rpc.storage().at_latest().await.unwrap().fetch(&key).await?;
 
 			log::debug!("Identity of {}: {:?}", address.to_ss58check(), query);
 			if let Some(id) = query {
@@ -234,18 +303,16 @@ impl Fellows {
 				continue;
 			}
 
-			interval.tick().await;
 			let r: &[u8; 32] = address.as_ref();
 			let address = subxt::utils::AccountId32(*r);
 			let key = polkadot::storage().identity().super_of(address);
-			let query = client.storage().at_latest().await.unwrap().fetch(&key).await?;
+			let query = relay_rpc.storage().at_latest().await.unwrap().fetch(&key).await?;
 			log::debug!("Fetched super identity: {:?}", query);
 
 			if let Some((acc, sub_name)) = query {
-				interval.tick().await;
 				log::debug!("Fetching sub identity: {:?}", data_to_str(&sub_name));
 				let key = polkadot::storage().identity().identity_of(acc);
-				let query = client.storage().at_latest().await.unwrap().fetch(&key).await?;
+				let query = relay_rpc.storage().at_latest().await.unwrap().fetch(&key).await?;
 
 				member.identity = query;
 			}
@@ -258,7 +325,7 @@ impl Fellows {
 	/// Query each profile description and check if the address is mentioned.
 	async fn fetch_github(&mut self) -> Result<()> {
 		log::info!("Fetching github profiles...");
-		let mut interval = tokio::time::interval(Duration::from_millis(2000));
+		let mut interval = tokio::time::interval(Duration::from_millis(1000));
 		#[derive(serde::Deserialize)]
 		struct Profile {
 			bio: Option<String>,
@@ -288,5 +355,40 @@ impl Fellows {
 		}
 
 		Ok(())
+	}
+}
+
+fn now_s() -> u64 {
+	let start = SystemTime::now();
+	let since_the_epoch = start.duration_since(UNIX_EPOCH).expect("Time went backwards");
+
+	since_the_epoch.as_secs()
+}
+
+pub trait Human {
+	fn human(&self) -> String;
+}
+
+impl<T: Human> Human for Option<T> {
+	fn human(&self) -> String {
+		self.as_ref().map_or("-".into(), |d| d.human())
+	}
+}
+
+impl Human for Option<core::time::Duration> {
+	fn human(&self) -> String {
+		self.as_ref().map_or("?".into(), |d| {
+			let s = d.as_secs();
+
+			if s < 60 {
+				format!("{}s", s % 60)
+			} else if s < 3600 {
+				format!("{}m", s / 60)
+			} else if s < 86400 {
+				format!("{}h", s / 3600)
+			} else {
+				format!("{}d", s / 86400)
+			}
+		})
 	}
 }

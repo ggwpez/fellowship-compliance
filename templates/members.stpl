@@ -2,6 +2,7 @@
 <html lang="en" data-bs-theme="dark">
   <head>
     <% include!("./header.stpl"); %>
+    <% use crate::chain::Human; %>
  
   <script>
     <% include!("./main.js"); %>
@@ -12,11 +13,17 @@
   
   <div class="container">
     <div class="row justify-content-end p-2">
+      <div class="col-4 d-flex justify-content-start" style="padding-left: 0px; padding-top: 0.6em; padding-bottom: 0.6em;">
+        <!-- Last updated -->
+        Updated <%= members.since_last_update().human() %> ago
+      </div>
+
       <div class="col-4 d-flex justify-content-center" style="padding-top: 0.6em; padding-bottom: 0.6em;">
         <a href="https://github.com/ggwpez/fellowship-compliance#inofficial-fellowship-compliance-board" target="_blank">
           THE FELLOWSHIP COMPLIANCE BOARD
         </a>
       </div>
+
       <div class="col-4 d-flex justify-content-end" style="padding-right: 0px">
         <!-- Source link -->
         <button class="astext" id="switch" class="astext checked">💡</button>

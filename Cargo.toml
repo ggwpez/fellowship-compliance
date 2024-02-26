@@ -7,22 +7,24 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-actix-files = "0.6.2"
-actix-web = { version = "4.4.0", features = ["openssl"] }
+actix-files = "0.6.5"
+actix-web = { version = "4.5.1", features = ["openssl"] }
 badge-maker = "0.3.1"
-cached = "0.46.1"
-clap = { version = "4.4.11", features = ["derive"] }
-env_logger = "0.10.1"
+cached = "0.48.1"
+clap = { version = "4.5.1", features = ["derive"] }
+env_logger = "0.11.2"
 fancy-regex = "0.13.0"
+futures = "0.3.30"
 html-escape = "0.2.13"
 log = "0.4.20"
 openssl = { version = "0.10", features = ["v110"] }
 parity-scale-codec = { version = "3.6.9", features = ["derive"] }
-reqwest = "0.11.23"
+reqwest = "0.11.24"
 sailfish = "0.8.3"
 scale-info = "2.10.0"
-serde = "1.0.193"
-serde_json = "1.0.108"
-sp-core = { version = "27.0.0", default-features = false, features = ["std"] }
-subxt = "0.33.0"
-tokio = "1.35.1"
+serde = "1.0.197"
+serde_json = "1.0.114"
+sp-core = { version = "29.0.0", default-features = false, features = ["std"] }
+subxt = { version = "0.34.0", features = ["unstable-light-client"], git = "https://github.com/paritytech/subxt", rev = "9c69619" }
+subxt-lightclient = { version = "0.34.0", git = "https://github.com/paritytech/subxt", rev = "9c69619" }
+tokio = "1.36.0"
