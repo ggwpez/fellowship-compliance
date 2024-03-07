@@ -1,8 +1,10 @@
 
 [package]
 name = "fellows"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
+repository = "https://github.com/ggwpez/fellowship-compliance"
+authors = ["Oliver Tale-Yazdi <oliver@tasty.limo>"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

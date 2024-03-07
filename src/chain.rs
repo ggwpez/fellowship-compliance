@@ -1,4 +1,4 @@
-use core::time::Duration;
+use core::{iter, time::Duration};
 use parity_scale_codec as Codec;
 use parity_scale_codec::Encode;
 use sp_core::{
@@ -8,15 +8,12 @@ use sp_core::{
 use std::{
 	collections::BTreeMap,
 	io::{Read, Write},
+	num::NonZeroU32,
+	time::{SystemTime, UNIX_EPOCH},
 };
-use core::iter;
-use std::num::NonZeroU32;
-use std::time::UNIX_EPOCH;
-use std::time::SystemTime;
-use subxt::*;
 use subxt::{
-    client::{LightClient, RawLightClient},
-    PolkadotConfig,
+	client::{LightClient, RawLightClient},
+	PolkadotConfig, *,
 };
 
 #[subxt::subxt(runtime_metadata_path = "metadata/polkadot.scale")]
@@ -90,7 +87,7 @@ impl Fellow {
 	}
 
 	pub fn github(&self) -> Option<String> {
-		self.identity.as_ref().and_then(|i| Self::reg_to_github(i))
+		self.identity.as_ref().and_then(Self::reg_to_github)
 	}
 }
 
@@ -115,10 +112,7 @@ type Client = OnlineClient<subxt::SubstrateConfig>;
 
 impl Fellows {
 	fn now() -> Self {
-		Self {
-			last_updated: Some(now_s()),
-			.. Default::default()
-		}
+		Self { last_updated: Some(now_s()), ..Default::default() }
 	}
 
 	pub fn since_last_update(&self) -> Option<Duration> {
@@ -133,7 +127,7 @@ impl Fellows {
 			match Self::try_from_cache() {
 				Ok(s) => {
 					log::info!("Loaded from cache");
-					return Ok(Self::finalize(s))
+					return Ok(Self::finalize(s));
 				},
 				Err(e) => log::warn!("Failed to load from cache. Falling back to fetch: {}", e),
 			}
@@ -176,6 +170,11 @@ impl Fellows {
 	}
 
 	pub async fn fetch() -> Result<Self> {
+		let timeout = Duration::from_secs(600); // 10 min timeout for syncing and fetching
+		tokio::time::timeout(timeout, Self::do_fetch()).await?
+	}
+
+	async fn do_fetch() -> Result<Self> {
 		let mut s = Self::now();
 		log::info!("Fetching data...");
 
@@ -183,6 +182,7 @@ impl Fellows {
 
 		s.fetch_fellows(&collectives_api).await?;
 		s.fetch_identities(&polkadot_api).await?;
+		std::mem::drop((polkadot_api, collectives_api));
 		s.fetch_github().await?;
 
 		// Store in a file for faster restarts if it crashed
@@ -196,44 +196,47 @@ impl Fellows {
 
 	/// Build a light client for the relay chain and the parachain.
 	async fn build_clients() -> Result<(LightClient<PolkadotConfig>, LightClient<PolkadotConfig>)> {
-		let mut client =
-        subxt_lightclient::smoldot::Client::new(subxt_lightclient::smoldot::DefaultPlatform::new(
-            "subxt-example-light-client".into(),
-            "version-0".into(),
-        ));
+		let mut client = subxt_lightclient::smoldot::Client::new(
+			subxt_lightclient::smoldot::DefaultPlatform::new(
+				"subxt-example-light-client".into(),
+				"version-0".into(),
+			),
+		);
+		log::info!("Setting up light clients #1");
 
 		let polkadot_connection = client
-        .add_chain(subxt_lightclient::smoldot::AddChainConfig {
-            specification: include_str!("../metadata/polkadot.json"),
-            json_rpc: subxt_lightclient::smoldot::AddChainConfigJsonRpc::Enabled {
-                max_pending_requests: NonZeroU32::new(128).unwrap(),
-                max_subscriptions: 1024,
-            },
-            potential_relay_chains: iter::empty(),
-            database_content: "",
-            user_data: (),
-        })
-        .expect("Light client chain added with valid spec; qed");
-    let polkadot_json_rpc_responses = polkadot_connection
-        .json_rpc_responses
-        .expect("Light client configured with json rpc enabled; qed");
-    let polkadot_chain_id = polkadot_connection.chain_id;
+			.add_chain(subxt_lightclient::smoldot::AddChainConfig {
+				specification: include_str!("../metadata/polkadot.json"),
+				json_rpc: subxt_lightclient::smoldot::AddChainConfigJsonRpc::Enabled {
+					max_pending_requests: NonZeroU32::new(128).unwrap(),
+					max_subscriptions: 1024,
+				},
+				potential_relay_chains: iter::empty(),
+				database_content: "",
+				user_data: (),
+			})
+			.expect("Light client chain added with valid spec; qed");
+		let polkadot_json_rpc_responses = polkadot_connection
+			.json_rpc_responses
+			.expect("Light client configured with json rpc enabled; qed");
+		let polkadot_chain_id = polkadot_connection.chain_id;
+		log::info!("Setting up light clients #2");
 
-    // Step 3. Connect to the parachain. For this example, the Asset hub parachain.
-    let assethub_connection = client
-        .add_chain(subxt_lightclient::smoldot::AddChainConfig {
-            specification: include_str!("../metadata/collectives-polkadot.json"),
-            json_rpc: subxt_lightclient::smoldot::AddChainConfigJsonRpc::Enabled {
-                max_pending_requests: NonZeroU32::new(128).unwrap(),
-                max_subscriptions: 1024,
-            },
-            // The chain specification of the asset hub parachain mentions that the identifier
-            // of its relay chain is `polkadot`.
-            potential_relay_chains: [polkadot_chain_id].into_iter(),
-            database_content: "",
-            user_data: (),
-        })
-        .expect("Light client chain added with valid spec; qed");
+		// Step 3. Connect to the parachain. For this example, the Asset hub parachain.
+		let assethub_connection = client
+			.add_chain(subxt_lightclient::smoldot::AddChainConfig {
+				specification: include_str!("../metadata/collectives-polkadot.json"),
+				json_rpc: subxt_lightclient::smoldot::AddChainConfigJsonRpc::Enabled {
+					max_pending_requests: NonZeroU32::new(128).unwrap(),
+					max_subscriptions: 1024,
+				},
+				// The chain specification of the asset hub parachain mentions that the identifier
+				// of its relay chain is `polkadot`.
+				potential_relay_chains: [polkadot_chain_id].into_iter(),
+				database_content: "",
+				user_data: (),
+			})
+			.expect("Light client chain added with valid spec; qed");
 		let parachain_json_rpc_responses = assethub_connection
 			.json_rpc_responses
 			.expect("Light client configured with json rpc enabled; qed");
@@ -251,16 +254,14 @@ impl Fellows {
 			raw_light_client.for_chain(polkadot_chain_id).await?;
 		let parachain_api: LightClient<PolkadotConfig> =
 			raw_light_client.for_chain(parachain_chain_id).await?;
+		log::info!("Connected to light clients");
 
 		// Step 6. Subscribe to the finalized blocks of the chains.
-		
-		Ok((polkadot_api, parachain_api))	
+
+		Ok((polkadot_api, parachain_api))
 	}
 
 	async fn fetch_fellows(&mut self, collectives_rpc: &LightClient<PolkadotConfig>) -> Result<()> {
-		log::info!("Initializing chain client...");
-		//let client = Client::from_url(&url).await.map_err(|e| format!("Failed to connect to {}: {}", url, e))?;
-
 		log::info!("Fetching collectives data...");
 		let mut members = BTreeMap::new();
 		let key = collectives::storage().fellowship_collective().members_iter();

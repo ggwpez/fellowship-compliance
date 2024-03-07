@@ -69,7 +69,7 @@ async fn main() -> std::io::Result<()> {
 		return Err(std::io::Error::new(
 			std::io::ErrorKind::Other,
 			format!("Web root path '{:?}' is not a directory", static_path),
-		))
+		));
 	}
 
 	let data = Data::new(RwLock::new(State::default()));
@@ -88,7 +88,7 @@ async fn main() -> std::io::Result<()> {
 
 	// Use this single-threaded runtime for spawning since out state is not `Send`.
 	actix_web::rt::spawn(async move {
-		let mut interval = tokio::time::interval(Duration::from_secs(60 * 60 * 3)); // 6 hrs
+		let mut interval = tokio::time::interval(Duration::from_secs(60 * 60 * 2)); // 2 hrs
 		{
 			interval.tick().await;
 			let fellows = chain::Fellows::load().await.unwrap();
