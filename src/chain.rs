@@ -22,7 +22,10 @@ pub mod polkadot {}
 #[subxt::subxt(runtime_metadata_path = "metadata/collectives-polkadot.scale")]
 pub mod collectives {}
 
-pub type Registration = polkadot::runtime_types::pallet_identity::types::Registration<u128>;
+pub type Registration = polkadot::runtime_types::pallet_identity::types::Registration<
+	u128,
+	polkadot::runtime_types::pallet_identity::simple::IdentityInfo,
+>;
 
 const RPC_COOLDOWN_MS: u64 = 2000;
 
