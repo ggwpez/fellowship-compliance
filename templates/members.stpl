@@ -15,7 +15,7 @@
     <div class="row justify-content-end p-2">
       <div class="col-4 d-flex justify-content-start" style="padding-left: 0px; padding-top: 0.6em; padding-bottom: 0.6em;">
         <!-- Last updated -->
-        Updated <%= members.since_last_update().human() %> ago
+        Updated <%= self.members.since_last_update().human() %> ago
       </div>
 
       <div class="col-4 d-flex justify-content-center" style="padding-top: 0.6em; padding-bottom: 0.6em;">
@@ -36,16 +36,16 @@
   <table id="myTable" class="display nowrap" style="width:100%" width="100%">
     <thead>
       <tr>
-        <th>Name (<%- members.num_named %>)</th>
-        <th>Verified (<%- members.num_verified %>)</th>
-        <th>Github (<%- members.num_github %>)</th>
-        <th>Verified (<%- members.num_github_verified %>)</th>
-        <th>Account (<%- members.num_accounts %>)</th>
+        <th>Name (<%- self.members.num_named %>)</th>
+        <th>Verified (<%- self.members.num_verified %>)</th>
+        <th>Github (<%- self.members.num_github %>)</th>
+        <th>Verified (<%- self.members.num_github_verified %>)</th>
+        <th>Account (<%- self.members.num_accounts %>)</th>
         <th>Rank</th>
       </tr>
     </thead>
     <tbody>
-    <% for member in members.members.values() { %>
+    <% for member in self.members.members.values() { %>
       <tr>
         <!-- NAME -->
         <td data-order='<%- member.name().is_some() %>'>

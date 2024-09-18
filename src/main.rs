@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// SPDX-FileCopyrightText: Oliver Tale-Yazdi <oliver@tasty.limo>
+
 #![allow(dead_code)] // The caching crate produces "unused" functions…
 #![allow(unused_imports)]
 
@@ -57,6 +60,7 @@ pub struct State {
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
 	std::env::set_var("RUST_BACKTRACE", "1");
+	dotenv::dotenv().ok();
 	env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
 	let cmd = MainCmd::parse();
 

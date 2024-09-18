@@ -1,32 +1,31 @@
 
 [package]
 name = "fellows"
-version = "0.1.3"
+version = "0.1.4"
 edition = "2021"
 repository = "https://github.com/ggwpez/fellowship-compliance"
 authors = ["Oliver Tale-Yazdi <oliver@tasty.limo>"]
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
-actix-files = "0.6.5"
-actix-web = { version = "4.5.1", features = ["openssl"] }
+actix-files = "0.6.6"
+actix-web = { version = "4.9.0", features = ["openssl"] }
 badge-maker = "0.3.1"
-cached = "0.48.1"
-clap = { version = "4.5.1", features = ["derive"] }
-env_logger = "0.11.2"
+cached = "0.53.1"
+clap = { version = "4.5.17", features = ["derive"] }
+dotenv = "0.15.0"
+env_logger = "0.11.5"
 fancy-regex = "0.13.0"
 futures = "0.3.30"
 html-escape = "0.2.13"
-log = "0.4.20"
+log = "0.4.22"
+octocrab = "0.39.0"
 openssl = { version = "0.10", features = ["v110"] }
-parity-scale-codec = { version = "3.6.9", features = ["derive"] }
-reqwest = "0.11.24"
-sailfish = "0.8.3"
-scale-info = "2.10.0"
-serde = "1.0.197"
-serde_json = "1.0.114"
-sp-core = { version = "29.0.0", default-features = false, features = ["std"] }
-subxt = { version = "0.34.0", features = ["unstable-light-client"], git = "https://github.com/paritytech/subxt", rev = "9c69619" }
-subxt-lightclient = { version = "0.34.0", git = "https://github.com/paritytech/subxt", rev = "9c69619" }
-tokio = "1.36.0"
+parity-scale-codec = { version = "3.6.12", features = ["derive"] }
+reqwest = "0.12.7"
+sailfish = "0.9.0"
+scale-info = "2.11.3"
+serde = "1.0.210"
+serde_json = "1.0.128"
+sp-core = { version = "34.0.0", default-features = false, features = ["std"] }
+subxt = { git = "https://github.com/paritytech/subxt", rev = "b25d56f3d1c975b0b02654b2696c517a48911044", features = ["unstable-light-client"] }
+tokio = "1.40.0"

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// SPDX-FileCopyrightText: Oliver Tale-Yazdi <oliver@tasty.limo>
+
 use core::{iter, time::Duration};
 use parity_scale_codec as Codec;
 use parity_scale_codec::Encode;
@@ -12,8 +15,8 @@ use std::{
 	time::{SystemTime, UNIX_EPOCH},
 };
 use subxt::{
-	client::{LightClient, RawLightClient},
 	PolkadotConfig, *,
+	lightclient::LightClient,
 };
 
 #[subxt::subxt(runtime_metadata_path = "metadata/polkadot.scale")]
@@ -22,9 +25,16 @@ pub mod polkadot {}
 #[subxt::subxt(runtime_metadata_path = "metadata/collectives-polkadot.scale")]
 pub mod collectives {}
 
-pub type Registration = polkadot::runtime_types::pallet_identity::types::Registration<
+#[subxt::subxt(runtime_metadata_path = "metadata/people-polkadot.scale")]
+pub mod people {}
+
+const POLKADOT_SPEC: &str = include_str!("../metadata/polkadot.json");
+const COLLECTIVES_SPEC: &str = include_str!("../metadata/collectives-polkadot.json");
+const PEOPLE_SPEC: &str = include_str!("../metadata/people-polkadot.json");
+
+pub type Registration = people::runtime_types::pallet_identity::types::Registration<
 	u128,
-	polkadot::runtime_types::pallet_identity::simple::IdentityInfo,
+	people::runtime_types::people_polkadot_runtime::people::IdentityInfo,
 >;
 
 const RPC_COOLDOWN_MS: u64 = 2000;
@@ -39,7 +49,7 @@ pub struct Fellow {
 	pub score: Option<u32>, // [0, 1]
 }
 
-fn data_to_str(data: &polkadot::runtime_types::pallet_identity::types::Data) -> Option<String> {
+fn data_to_str(data: &people::runtime_types::pallet_identity::types::Data) -> Option<String> {
 	// Wtf...
 	let mut encoded = data.encode();
 	if encoded[0] >= 1 && encoded[0] <= 33 {
@@ -62,7 +72,7 @@ impl Fellow {
 	}
 
 	pub fn verified(&self) -> bool {
-		use polkadot::runtime_types::pallet_identity::types::Judgement::*;
+		use people::runtime_types::pallet_identity::types::Judgement::*;
 		self.identity
 			.as_ref()
 			.map(|r| {
@@ -81,12 +91,7 @@ impl Fellow {
 	}
 
 	fn reg_to_github(r: &Registration) -> Option<String> {
-		for (k, v) in r.info.additional.0.iter() {
-			if data_to_str(k) == Some("github".to_string()) {
-				return data_to_str(v);
-			}
-		}
-		None
+		data_to_str(&r.info.github)
 	}
 
 	pub fn github(&self) -> Option<String> {
@@ -181,11 +186,12 @@ impl Fellows {
 		let mut s = Self::now();
 		log::info!("Fetching data...");
 
-		let (polkadot_api, collectives_api) = Self::build_clients().await?;
+		let (polkadot_api, collectives_api, people_api) = Self::build_clients().await?;
+		log::info!("Clients set up");
 
 		s.fetch_fellows(&collectives_api).await?;
-		s.fetch_identities(&polkadot_api).await?;
-		std::mem::drop((polkadot_api, collectives_api));
+		s.fetch_identities(&people_api).await?;
+		std::mem::drop((polkadot_api, collectives_api, people_api));
 		s.fetch_github().await?;
 
 		// Store in a file for faster restarts if it crashed
@@ -197,80 +203,31 @@ impl Fellows {
 		Ok(s.finalize())
 	}
 
-	/// Build a light client for the relay chain and the parachain.
-	async fn build_clients() -> Result<(LightClient<PolkadotConfig>, LightClient<PolkadotConfig>)> {
-		let mut client = subxt_lightclient::smoldot::Client::new(
-			subxt_lightclient::smoldot::DefaultPlatform::new(
-				"subxt-example-light-client".into(),
-				"version-0".into(),
-			),
-		);
-		log::info!("Setting up light clients #1");
+	// (polkadot, collectives, people)
+	async fn build_clients() -> Result<(OnlineClient<PolkadotConfig>, OnlineClient<PolkadotConfig>, OnlineClient<PolkadotConfig>)> {
+		//let (lightclient, polkadot_rpc) = LightClient::relay_chain(POLKADOT_SPEC)?;
+		//let collective_rpc = lightclient.parachain(COLLECTIVES_SPEC)?;
+		//let people_rpc = lightclient.parachain(PEOPLE_SPEC)?;
+		let polkadot_rpc = std::env::var("POLKADOT_RPC").expect("POLKADOT_RPC not set");
+		let collective_rpc = std::env::var("COLLECTIVES_RPC").expect("COLLECTIVES_RPC not set");
+		let people_rpc = std::env::var("PEOPLE_RPC").expect("PEOPLE_RPC not set");
 
-		let polkadot_connection = client
-			.add_chain(subxt_lightclient::smoldot::AddChainConfig {
-				specification: include_str!("../metadata/polkadot.json"),
-				json_rpc: subxt_lightclient::smoldot::AddChainConfigJsonRpc::Enabled {
-					max_pending_requests: NonZeroU32::new(128).unwrap(),
-					max_subscriptions: 1024,
-				},
-				potential_relay_chains: iter::empty(),
-				database_content: "",
-				user_data: (),
-			})
-			.expect("Light client chain added with valid spec; qed");
-		let polkadot_json_rpc_responses = polkadot_connection
-			.json_rpc_responses
-			.expect("Light client configured with json rpc enabled; qed");
-		let polkadot_chain_id = polkadot_connection.chain_id;
-		log::info!("Setting up light clients #2");
+		let polkadot_api = OnlineClient::<PolkadotConfig>::from_url(polkadot_rpc).await?;
+		let collective_api = OnlineClient::<PolkadotConfig>::from_url(collective_rpc).await?;
+		let people_api = OnlineClient::<PolkadotConfig>::from_url(people_rpc).await?;
 
-		// Step 3. Connect to the parachain. For this example, the Asset hub parachain.
-		let assethub_connection = client
-			.add_chain(subxt_lightclient::smoldot::AddChainConfig {
-				specification: include_str!("../metadata/collectives-polkadot.json"),
-				json_rpc: subxt_lightclient::smoldot::AddChainConfigJsonRpc::Enabled {
-					max_pending_requests: NonZeroU32::new(128).unwrap(),
-					max_subscriptions: 1024,
-				},
-				// The chain specification of the asset hub parachain mentions that the identifier
-				// of its relay chain is `polkadot`.
-				potential_relay_chains: [polkadot_chain_id].into_iter(),
-				database_content: "",
-				user_data: (),
-			})
-			.expect("Light client chain added with valid spec; qed");
-		let parachain_json_rpc_responses = assethub_connection
-			.json_rpc_responses
-			.expect("Light client configured with json rpc enabled; qed");
-		let parachain_chain_id = assethub_connection.chain_id;
-
-		// Step 4. Turn the smoldot client into a raw client.
-		let raw_light_client = RawLightClient::builder()
-			.add_chain(polkadot_chain_id, polkadot_json_rpc_responses)
-			.add_chain(parachain_chain_id, parachain_json_rpc_responses)
-			.build(client)
-			.await?;
-
-		// Step 5. Obtain a client to target the relay chain and the parachain.
-		let polkadot_api: LightClient<PolkadotConfig> =
-			raw_light_client.for_chain(polkadot_chain_id).await?;
-		let parachain_api: LightClient<PolkadotConfig> =
-			raw_light_client.for_chain(parachain_chain_id).await?;
-		log::info!("Connected to light clients");
-
-		// Step 6. Subscribe to the finalized blocks of the chains.
-
-		Ok((polkadot_api, parachain_api))
+		Ok((polkadot_api, collective_api, people_api))
 	}
 
-	async fn fetch_fellows(&mut self, collectives_rpc: &LightClient<PolkadotConfig>) -> Result<()> {
+	async fn fetch_fellows(&mut self, collectives_rpc: &OnlineClient<PolkadotConfig>) -> Result<()> {
 		log::info!("Fetching collectives data...");
 		let mut members = BTreeMap::new();
 		let key = collectives::storage().fellowship_collective().members_iter();
 		let mut query = collectives_rpc.storage().at_latest().await.unwrap().iter(key).await?;
 
-		while let Some(Ok((id, fellow))) = query.next().await {
+		while let Some(Ok(pair)) = query.next().await {
+			let id = pair.key_bytes;
+			let fellow = pair.value;
 			let account = AccountId32::from_slice(&id[id.len() - 32..]).unwrap();
 
 			log::info!("Fetched member: {} rank {}", account.to_ss58check(), fellow.rank);
@@ -292,33 +249,33 @@ impl Fellows {
 		Ok(())
 	}
 
-	async fn fetch_identities(&mut self, relay_rpc: &LightClient<PolkadotConfig>) -> Result<()> {
+	async fn fetch_identities(&mut self, relay_rpc: &OnlineClient<PolkadotConfig>) -> Result<()> {
 		log::info!("Fetching identities...");
 		for (address, member) in self.members.iter_mut() {
 			// Subxt has a sligly different address type...
 			let r: &[u8; 32] = address.as_ref();
 			let add = subxt::utils::AccountId32(*r);
-			let key = polkadot::storage().identity().identity_of(add);
+			let key = people::storage().identity().identity_of(add);
 			let query = relay_rpc.storage().at_latest().await.unwrap().fetch(&key).await?;
 
 			log::debug!("Identity of {}: {:?}", address.to_ss58check(), query);
-			if let Some(id) = query {
+			if let Some((id, _)) = query {
 				member.identity = Some(id);
 				continue;
 			}
 
 			let r: &[u8; 32] = address.as_ref();
 			let address = subxt::utils::AccountId32(*r);
-			let key = polkadot::storage().identity().super_of(address);
+			let key = people::storage().identity().super_of(address);
 			let query = relay_rpc.storage().at_latest().await.unwrap().fetch(&key).await?;
 			log::debug!("Fetched super identity: {:?}", query);
 
 			if let Some((acc, sub_name)) = query {
 				log::debug!("Fetching sub identity: {:?}", data_to_str(&sub_name));
-				let key = polkadot::storage().identity().identity_of(acc);
+				let key = people::storage().identity().identity_of(acc);
 				let query = relay_rpc.storage().at_latest().await.unwrap().fetch(&key).await?;
 
-				member.identity = query;
+				member.identity = query.map(|(id, _)| id);
 			}
 			log::info!("Fetched identity");
 		}
@@ -329,15 +286,17 @@ impl Fellows {
 	/// Query each profile description and check if the address is mentioned.
 	async fn fetch_github(&mut self) -> Result<()> {
 		log::info!("Fetching github profiles...");
-		let mut interval = tokio::time::interval(Duration::from_millis(1000));
-		#[derive(serde::Deserialize)]
-		struct Profile {
-			bio: Option<String>,
+
+		let mut builder = octocrab::Octocrab::builder();
+		if let Ok(token) = std::env::var("GITHUB_TOKEN") {
+			log::info!("Using GITUB_TOKEN for authentication");
+			builder = builder.personal_token(token);
+		} else {
+			log::warn!("No GITHUB_TOKEN set. Rate limits will be lower");
 		}
-		let client = reqwest::Client::builder().user_agent("useragent@spam.tasty.limo").build()?;
+		let octo = builder.build()?;
 
 		for (_, member) in self.members.iter_mut() {
-			interval.tick().await;
 			let address = member.address();
 
 			let Some(github) = member.github() else {
@@ -345,17 +304,12 @@ impl Fellows {
 				continue;
 			};
 
-			log::debug!("Fetching github profile of {}", github);
-			let url = format!("https://api.github.com/users/{}", github);
-			let resp = client.get(&url).send().await?;
-
-			let profile = resp.text().await?;
-			log::debug!("Github profile: {}", profile);
-			let profile: Profile = serde_json::from_str(&profile)?;
-
-			member.github_links_back = profile.bio.map_or(false, |b| b.contains(&address));
-			log::debug!("{} links back: {}", address, member.github_links_back);
-			log::info!("Fetched github profile");
+			let github = github.replace("@", "").trim();
+			log::info!("Fetching github profile of {}", &github);
+			if let Ok(profile) = octo.users(github).profile().await {
+				member.github_links_back = profile.bio.map_or(false, |b| b.contains(&address));
+				log::debug!("{} links back: {}", address, member.github_links_back);
+			}
 		}
 
 		Ok(())
