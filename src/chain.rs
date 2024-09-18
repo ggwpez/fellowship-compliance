@@ -304,9 +304,9 @@ impl Fellows {
 				continue;
 			};
 
-			let github = github.replace("@", "").trim();
+			let github = github.replace("@", "");
 			log::info!("Fetching github profile of {}", &github);
-			if let Ok(profile) = octo.users(github).profile().await {
+			if let Ok(profile) = octo.users(github.trim()).profile().await {
 				member.github_links_back = profile.bio.map_or(false, |b| b.contains(&address));
 				log::debug!("{} links back: {}", address, member.github_links_back);
 			}
